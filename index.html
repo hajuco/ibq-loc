@@ -9,20 +9,27 @@
 *{box-sizing:border-box}
 body{font-family:system-ui,sans-serif;margin:0;background:#0f1416;color:#e6e6e6}
 .wrap{max-width:62rem;margin:0 auto;padding:1rem 1rem 3rem}
-h1{font-size:1.5rem;margin:.2rem 0 1rem}
-h2{font-size:1.1rem;margin:0}
+h1{font-size:1.5rem;margin:.2rem 0 .6rem}
+h2{font-size:1.05rem;margin:0}
 .muted{color:#8a99a0;font-size:.9rem}
+.toolbar{display:flex;flex-wrap:wrap;gap:.4rem;align-items:center;margin-bottom:1rem}
+.tool{padding:.5rem .8rem;font-size:.9rem;border:1px solid #3a4a52;border-radius:.5rem;background:#243036;color:#e6e6e6;cursor:pointer}
+#msg{margin-left:.3rem}
 .grid{display:grid;grid-template-columns:1fr;gap:1rem}
 @media(min-width:640px){.grid{grid-template-columns:repeat(auto-fill,minmax(300px,1fr))}}
-.card{background:#1a2226;border:1px solid #2c383d;border-radius:.8rem;padding:1rem;display:flex;flex-direction:column;gap:.6rem}
-.head{display:flex;align-items:center;gap:.5rem}
+.card{background:#1a2226;border:1px solid #2c383d;border-radius:.8rem;padding:1rem;display:flex;flex-direction:column;gap:.55rem}
+.head{display:flex;align-items:center;gap:.4rem}
 .head h2{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.icon{background:transparent;border:none;color:#9fb0b8;font-size:1.1rem;padding:.3rem;cursor:pointer;border-radius:.4rem}
+.cnt{font-size:.8rem;font-variant-numeric:tabular-nums;padding:.1rem .45rem;border:1px solid #2c383d;border-radius:1rem;color:#9fb0b8;white-space:nowrap}
+.cnt.warn{color:#ffcf8f;border-color:#5a4a30}
+.cnt.limit{color:#ff9a9a;border-color:#5a3030}
+.icon{background:transparent;border:none;color:#9fb0b8;font-size:1.05rem;padding:.3rem;cursor:pointer;border-radius:.4rem}
 .icon:active{background:#2c3c44}
 button.primary{width:100%;padding:1rem;font-size:1.1rem;font-weight:600;border:none;border-radius:.6rem;background:#1e6f4c;color:#fff;cursor:pointer}
 button.primary:active{background:#175a3d}
 button.primary:disabled{opacity:.5;cursor:default}
-.result{min-height:1.3rem;white-space:pre-wrap;word-break:break-word;font-size:.95rem}
+.limited{background:#3a1e1e;border:1px solid #7a3030;color:#ffbdbd;border-radius:.5rem;padding:.5rem .6rem;font-size:.88rem;display:none}
+.result{min-height:1.2rem;white-space:pre-wrap;word-break:break-word;font-size:.95rem}
 .result a{color:#7fc4ff}
 .time{color:#8a99a0;font-size:.78rem}
 iframe.map{width:100%;height:230px;border:0;border-radius:.5rem;display:none;background:#0b0f11}
@@ -44,9 +51,16 @@ summary{cursor:pointer;color:#9fb0b8;font-size:.85rem}
 <body>
 <div class="wrap">
   <h1>Hol van?</h1>
+  <div class="toolbar">
+    <button class="tool" id="expBtn">⬇ Mentés fájlba</button>
+    <button class="tool" id="impBtn">⬆ Betöltés fájlból</button>
+    <input type="file" id="impFile" accept="application/json,.json" hidden>
+    <span id="msg" class="muted"></span>
+  </div>
   <div id="grid" class="grid"></div>
   <p id="empty" class="muted" style="display:none">Még nincs telefon hozzáadva. Add hozzá az elsőt a lenti gombbal, és írd be az app „Helyzetmegosztás" kártyáján megjelenő két topicot.</p>
   <button class="addbtn" id="addBtn">➕ Telefon hozzáadása</button>
+  <p class="muted" style="margin-top:1.4rem;font-size:.8rem">A ≈ szám a böngésződ közös ntfy-kerete (kb. 60 kérés, 5 mp-enként +1). Csak becslés — a tényleges elfogyást az ntfy 429-es hibája jelzi a panelen. A topicok itt a böngésződben tárolódnak; a „Mentés fájlba" gombbal készíts biztonsági mentést, mert a böngésző-adatok törlése egyébként ezt is törli.</p>
 </div>
 
 <dialog id="dlg">
@@ -70,16 +84,13 @@ summary{cursor:pointer;color:#9fb0b8;font-size:.85rem}
 </dialog>
 
 <script>
-var STATE = {advertising:"Sugároz", stopped:"Nem sugároz", starting:"Indul…",
-  waiting_for_bluetooth:"Bluetooth ki", permission_missing:"Hiányzó engedély",
-  unsupported:"Nem támogatott", error:"Hiba"};
 var sources = {};       // id -> EventSource
 var editingId = null;
 
+/* ---------- persistence ---------- */
 function load(){
   var raw = localStorage.getItem("devices");
   if(raw){ try{ return JSON.parse(raw); }catch(e){} }
-  // Migrate the old single-topic layout into one device, if present.
   var oldCmd = localStorage.getItem("ntfy_cmd");
   if(oldCmd){
     var one = [{ id: mkId(), name: "Telefon",
@@ -93,9 +104,21 @@ function save(d){ localStorage.setItem("devices", JSON.stringify(d)); }
 function mkId(){ return "d" + Date.now() + Math.floor(Math.random()*1000); }
 function baseOf(d){ return (d.base || "https://ntfy.sh").replace(/\/+$/, ""); }
 
+/* ---------- ntfy token-bucket estimate (per browser IP, shared) ---------- */
+var TOK_MAX = 60, TOK_REFILL_MS = 5000;
+function currentTokens(){
+  var t = parseFloat(localStorage.getItem("tok"));
+  var ts = parseFloat(localStorage.getItem("tokTs"));
+  if(isNaN(t)) t = TOK_MAX;
+  if(isNaN(ts)) ts = Date.now();
+  return Math.min(TOK_MAX, t + (Date.now()-ts)/TOK_REFILL_MS);
+}
+function setTokens(v){ localStorage.setItem("tok", String(v)); localStorage.setItem("tokTs", String(Date.now())); }
+function spendToken(){ setTokens(Math.max(0, currentTokens()-1)); }
+
+/* ---------- rendering ---------- */
 function esc(t){ return t.replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;"); }
 function linkify(t){ return esc(t).replace(/(https?:\/\/[^\s]+)/g, function(u){ return '<a href="'+u+'" target="_blank" rel="noopener">'+u+'</a>'; }); }
-
 function closeSources(){ for(var k in sources){ try{ sources[k].close(); }catch(e){} } sources = {}; }
 
 function render(){
@@ -105,15 +128,17 @@ function render(){
   var devices = load();
   document.getElementById("empty").style.display = devices.length ? "none" : "block";
   devices.forEach(function(d){ grid.appendChild(panel(d)); subscribe(d); });
+  updateCounters();
 }
 
 function panel(d){
   var card = document.createElement("div");
   card.className = "card";
   card.innerHTML =
-    '<div class="head"><h2></h2>'+
+    '<div class="head"><h2></h2><span class="cnt" title="Becsült, böngészőnként közös ntfy-keret"></span>'+
     '<button class="icon" title="Szerkesztés" data-act="edit">✏️</button></div>'+
     '<button class="primary" data-act="ask">📍 Lekérés</button>'+
+    '<div class="limited"></div>'+
     '<div class="result muted">Még nem érkezett helyzet.</div>'+
     '<iframe class="map" title="Térkép" loading="lazy"></iframe>'+
     '<div class="maplink"></div>'+
@@ -126,11 +151,39 @@ function panel(d){
   return card;
 }
 
+function updateCounters(){
+  var n = Math.floor(currentTokens());
+  document.querySelectorAll(".cnt").forEach(function(el){
+    if(el.dataset.limited === "1"){ el.textContent = "⛔ 429"; el.className = "cnt limit"; return; }
+    el.textContent = "≈ " + n;
+    el.className = "cnt" + (n <= 5 ? " warn" : "");
+  });
+}
+setInterval(updateCounters, 2000);
+
 function ask(d, btn, card){
   if(!d.cmd){ card.querySelector(".result").textContent = "Nincs parancs-topic beállítva."; return; }
+  var cnt = card.querySelector(".cnt");
+  var limited = card.querySelector(".limited");
   btn.disabled = true; var old = btn.textContent; btn.textContent = "Kérés elküldve…";
+  spendToken(); updateCounters();
   fetch(baseOf(d) + "/" + d.cmd, { method:"POST", body:"locate" })
-    .catch(function(){})
+    .then(function(r){
+      if(r.status === 429){
+        setTokens(0);
+        cnt.dataset.limited = "1";
+        var ra = r.headers.get("Retry-After");
+        limited.textContent = "⛔ Elérted az ntfy korlátját (HTTP 429). " +
+          (ra ? ("Próbáld kb. " + ra + " mp múlva.") : "Várj egy kicsit, aztán újra.");
+        limited.style.display = "block";
+      } else {
+        cnt.dataset.limited = "";
+        limited.style.display = "none";
+        if(!r.ok){ card.querySelector(".result").textContent = "Küldési hiba (HTTP " + r.status + ")."; }
+      }
+      updateCounters();
+    })
+    .catch(function(){ card.querySelector(".result").textContent = "Nem sikerült elküldeni (nincs net?)."; })
     .finally(function(){ setTimeout(function(){ btn.disabled=false; btn.textContent=old; }, 3000); });
 }
 
@@ -151,7 +204,6 @@ function cardById(id){
   for(var i=0;i<grid.children.length;i++){ if(grid.children[i]._d && grid.children[i]._d.id===id) return grid.children[i]; }
   return null;
 }
-
 function showResult(id, message, timeSec){
   var card = cardById(id); if(!card) return;
   var r = card.querySelector(".result");
@@ -168,7 +220,7 @@ function showResult(id, message, timeSec){
   } else { map.style.display = "none"; link.innerHTML = ""; }
 }
 
-/* ---- add / edit dialog ---- */
+/* ---------- add / edit dialog ---------- */
 var dlg = document.getElementById("dlg");
 function openDialog(d){
   editingId = d ? d.id : null;
@@ -181,7 +233,6 @@ function openDialog(d){
   if(typeof dlg.showModal === "function") dlg.showModal(); else dlg.setAttribute("open","");
 }
 function closeDialog(){ if(dlg.close) dlg.close(); else dlg.removeAttribute("open"); }
-
 document.getElementById("addBtn").onclick = function(){ openDialog(null); };
 document.getElementById("fCancel").onclick = closeDialog;
 document.getElementById("fSave").onclick = function(){
@@ -192,17 +243,42 @@ document.getElementById("fSave").onclick = function(){
     res: document.getElementById("fRes").value.trim(),
     base: document.getElementById("fBase").value.trim() || "https://ntfy.sh"
   };
-  if(editingId){
-    devices = devices.map(function(x){ return x.id===editingId ? Object.assign(x, rec) : x; });
-  } else {
-    rec.id = mkId(); devices.push(rec);
-  }
+  if(editingId){ devices = devices.map(function(x){ return x.id===editingId ? Object.assign(x, rec) : x; }); }
+  else { rec.id = mkId(); devices.push(rec); }
   save(devices); closeDialog(); render();
 };
 document.getElementById("fDelete").onclick = function(){
   if(!editingId) return;
   save(load().filter(function(x){ return x.id !== editingId; }));
   closeDialog(); render();
+};
+
+/* ---------- export / import (survives clearing browser data) ---------- */
+function flash(t){ var m=document.getElementById("msg"); m.textContent=t; setTimeout(function(){ if(m.textContent===t) m.textContent=""; }, 4000); }
+document.getElementById("expBtn").onclick = function(){
+  var data = JSON.stringify({ devices: load() }, null, 2);
+  var a = document.createElement("a");
+  a.href = URL.createObjectURL(new Blob([data], {type:"application/json"}));
+  a.download = "holvan-telefonok.json";
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(function(){ URL.revokeObjectURL(a.href); }, 1000);
+  flash("Elmentve fájlba.");
+};
+document.getElementById("impBtn").onclick = function(){ document.getElementById("impFile").click(); };
+document.getElementById("impFile").onchange = function(e){
+  var f = e.target.files[0]; if(!f) return;
+  var fr = new FileReader();
+  fr.onload = function(){
+    try{
+      var obj = JSON.parse(fr.result);
+      if(obj && Array.isArray(obj.devices)){
+        obj.devices.forEach(function(d){ if(!d.id) d.id = mkId(); });
+        save(obj.devices); render(); flash("Betöltve: " + obj.devices.length + " telefon.");
+      } else { flash("Nem megfelelő fájl."); }
+    }catch(err){ flash("Hibás fájl."); }
+  };
+  fr.readAsText(f);
+  e.target.value = "";
 };
 
 render();
