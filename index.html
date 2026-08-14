@@ -1,0 +1,137 @@
+<!doctype html>
+<html lang="hu">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Hol van?</title>
+<style>
+:root{color-scheme:dark}
+*{box-sizing:border-box}
+body{font-family:sans-serif;margin:0 auto;max-width:34rem;padding:1.2rem;background:#0f1416;color:#e6e6e6}
+h1{font-size:1.5rem;margin:.2rem 0 1rem}
+.card{background:#1a2226;border:1px solid #2c383d;border-radius:.7rem;padding:1rem;margin:.8rem 0}
+label{display:block;font-size:.85rem;color:#9fb0b8;margin:.5rem 0 .15rem}
+input{width:100%;padding:.55rem;font-size:1rem;background:#0f1416;color:#e6e6e6;border:1px solid #3a4a52;border-radius:.4rem}
+button{width:100%;padding:1rem;font-size:1.15rem;font-weight:600;border:none;border-radius:.6rem;background:#1e6f4c;color:#fff;cursor:pointer;margin-top:.4rem}
+button:active{background:#175a3d}
+button:disabled{opacity:.5;cursor:default}
+#result{min-height:3rem;white-space:pre-wrap;word-break:break-word}
+#result a{color:#7fc4ff}
+.muted{color:#8a99a0;font-size:.85rem}
+.row{display:flex;gap:.5rem}
+.row input{flex:1}
+details summary{cursor:pointer;color:#9fb0b8}
+.time{color:#8a99a0;font-size:.8rem;margin-top:.3rem}
+</style>
+</head>
+<body>
+<h1>Hol van?</h1>
+
+<div class="card">
+  <button id="ask">📍 Pillanatnyi helyzet lekérése</button>
+  <p class="muted" id="askMsg">A gomb megnyomására a telefon — ha épp elérhető — elküldi az aktuális pozícióját.</p>
+</div>
+
+<div class="card">
+  <div id="result" class="muted">Még nem érkezett helyzet.</div>
+  <div class="time" id="resultTime"></div>
+</div>
+
+<div class="card" id="mapCard" style="display:none;padding:0;overflow:hidden">
+  <iframe id="map" title="Térkép" loading="lazy" style="width:100%;height:340px;border:0;display:block"></iframe>
+  <div style="padding:.6rem .8rem"><a id="mapLink" href="#" target="_blank" rel="noopener">Nagyobb térképen ↗</a></div>
+</div>
+
+<details class="card">
+  <summary>Beállítások</summary>
+  <label>ntfy szerver</label>
+  <input id="base" placeholder="https://ntfy.sh">
+  <label>Parancs-topic (ide megy a lekérés)</label>
+  <input id="cmd" placeholder="ibq-cmd-…">
+  <label>Eredmény-topic (innen jön a helyzet)</label>
+  <input id="result_topic" placeholder="ibq-loc-…">
+  <p class="muted">A topicneveket az alkalmazás „Helyzetmegosztás" kártyája adja meg; írd be ide ugyanazokat. Csak ebben a böngészőben tárolódnak (localStorage), sehova nem kerülnek fel.</p>
+</details>
+
+<script>
+var K = { base: "ntfy_base", cmd: "ntfy_cmd", res: "ntfy_res" };
+var elBase = document.getElementById("base");
+var elCmd = document.getElementById("cmd");
+var elRes = document.getElementById("result_topic");
+var elResult = document.getElementById("result");
+var elResultTime = document.getElementById("resultTime");
+var elAsk = document.getElementById("ask");
+var elAskMsg = document.getElementById("askMsg");
+var evtSource = null;
+
+function load(){
+  elBase.value = localStorage.getItem(K.base) || "https://ntfy.sh";
+  elCmd.value = localStorage.getItem(K.cmd) || "";
+  elRes.value = localStorage.getItem(K.res) || "";
+}
+function save(){
+  localStorage.setItem(K.base, elBase.value.trim());
+  localStorage.setItem(K.cmd, elCmd.value.trim());
+  localStorage.setItem(K.res, elRes.value.trim());
+  subscribe();
+}
+[elBase, elCmd, elRes].forEach(function(i){ i.addEventListener("change", save); });
+
+function base(){ return (elBase.value.trim() || "https://ntfy.sh").replace(/\/+$/, ""); }
+
+function linkify(text){
+  // Turn a bare https URL into a clickable link; escape everything else.
+  var esc = text.replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;");
+  return esc.replace(/(https?:\/\/[^\s]+)/g, function(u){ return '<a href="'+u+'" target="_blank" rel="noopener">'+u+'</a>'; });
+}
+
+function showResult(message, timeSec){
+  elResult.classList.remove("muted");
+  elResult.innerHTML = linkify(message);
+  var when = timeSec ? new Date(timeSec*1000) : new Date();
+  elResultTime.textContent = "beérkezett: " + when.toLocaleString("hu-HU");
+  // The location message carries "?q=<lat>,<lon>"; pull it out and show a map on it.
+  var m = message.match(/q=(-?\d+(?:\.\d+)?),(-?\d+(?:\.\d+)?)/);
+  if(m){ showMap(parseFloat(m[1]), parseFloat(m[2])); } else { hideMap(); }
+}
+
+function showMap(lat, lon){
+  var d = 0.004; // ~400 m half-window
+  var bbox = (lon-d) + "," + (lat-d) + "," + (lon+d) + "," + (lat+d);
+  document.getElementById("map").src =
+    "https://www.openstreetmap.org/export/embed.html?bbox=" + bbox + "&layer=mapnik&marker=" + lat + "," + lon;
+  document.getElementById("mapLink").href =
+    "https://www.openstreetmap.org/?mlat=" + lat + "&mlon=" + lon + "#map=16/" + lat + "/" + lon;
+  document.getElementById("mapCard").style.display = "block";
+}
+function hideMap(){ document.getElementById("mapCard").style.display = "none"; }
+
+function subscribe(){
+  if(evtSource){ evtSource.close(); evtSource = null; }
+  var res = elRes.value.trim();
+  if(!res){ return; }
+  evtSource = new EventSource(base() + "/" + res + "/sse");
+  evtSource.onmessage = function(e){
+    try{
+      var d = JSON.parse(e.data);
+      if(d.event === "message" && d.message){ showResult(d.message, d.time); }
+    }catch(err){}
+  };
+}
+
+elAsk.addEventListener("click", function(){
+  var cmd = elCmd.value.trim();
+  if(!cmd){ elAskMsg.textContent = "Előbb töltsd ki a Beállításokban a parancs-topicot."; return; }
+  elAsk.disabled = true;
+  elAskMsg.textContent = "Lekérés elküldve, várakozás a válaszra…";
+  fetch(base() + "/" + cmd, { method:"POST", body:"locate" })
+    .then(function(r){ elAskMsg.textContent = r.ok ? "Lekérés elküldve. A helyzet néhány másodpercen belül megjelenhet." : "A lekérés nem ment át (HTTP " + r.status + ")."; })
+    .catch(function(){ elAskMsg.textContent = "Nem sikerült elküldeni a lekérést (nincs net?)."; })
+    .finally(function(){ setTimeout(function(){ elAsk.disabled = false; }, 3000); });
+});
+
+load();
+subscribe();
+</script>
+</body>
+</html>
