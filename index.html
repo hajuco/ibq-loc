@@ -14,21 +14,21 @@ h2{font-size:1.05rem;margin:0}
 .muted{color:#8a99a0;font-size:.9rem}
 .toolbar{display:flex;flex-wrap:wrap;gap:.4rem;align-items:center;margin-bottom:1rem}
 .tool{padding:.5rem .8rem;font-size:.9rem;border:1px solid #3a4a52;border-radius:.5rem;background:#243036;color:#e6e6e6;cursor:pointer}
+#conn{font-size:.85rem;padding:.35rem .7rem;border-radius:1rem;border:1px solid #3a4a52;white-space:nowrap}
+#conn.ok{color:#8fe0a0;border-color:#2f5a3a}
+#conn.bad{color:#ff9a9a;border-color:#5a3030}
+#conn.wait{color:#ffcf8f;border-color:#5a4a30}
 #msg{margin-left:.3rem}
 .grid{display:grid;grid-template-columns:1fr;gap:1rem}
 @media(min-width:640px){.grid{grid-template-columns:repeat(auto-fill,minmax(300px,1fr))}}
 .card{background:#1a2226;border:1px solid #2c383d;border-radius:.8rem;padding:1rem;display:flex;flex-direction:column;gap:.55rem}
 .head{display:flex;align-items:center;gap:.4rem}
 .head h2{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.cnt{font-size:.8rem;font-variant-numeric:tabular-nums;padding:.1rem .45rem;border:1px solid #2c383d;border-radius:1rem;color:#9fb0b8;white-space:nowrap}
-.cnt.warn{color:#ffcf8f;border-color:#5a4a30}
-.cnt.limit{color:#ff9a9a;border-color:#5a3030}
 .icon{background:transparent;border:none;color:#9fb0b8;font-size:1.05rem;padding:.3rem;cursor:pointer;border-radius:.4rem}
 .icon:active{background:#2c3c44}
 button.primary{width:100%;padding:1rem;font-size:1.1rem;font-weight:600;border:none;border-radius:.6rem;background:#1e6f4c;color:#fff;cursor:pointer}
 button.primary:active{background:#175a3d}
 button.primary:disabled{opacity:.5;cursor:default}
-.limited{background:#3a1e1e;border:1px solid #7a3030;color:#ffbdbd;border-radius:.5rem;padding:.5rem .6rem;font-size:.88rem;display:none}
 .result{min-height:1.2rem;white-space:pre-wrap;word-break:break-word;font-size:.95rem}
 .result a{color:#7fc4ff}
 .time{color:#8a99a0;font-size:.78rem}
@@ -44,38 +44,50 @@ input{width:100%;padding:.6rem;font-size:1rem;background:#0f1416;color:#e6e6e6;b
 .dlgrow button{padding:.6rem 1rem;font-size:1rem;border-radius:.5rem;border:1px solid #3a4a52;background:#243036;color:#e6e6e6;cursor:pointer}
 .dlgrow button.save{background:#1e6f4c;border-color:#1e6f4c;color:#fff}
 .dlgrow button.del{background:#5a2323;border-color:#7a3030;color:#fff;margin-right:auto}
-details{margin-top:.4rem}
-summary{cursor:pointer;color:#9fb0b8;font-size:.85rem}
+.hint{font-size:.78rem;color:#8a99a0;margin-top:1.2rem}
 </style>
 </head>
 <body>
 <div class="wrap">
   <h1>Hol van?</h1>
   <div class="toolbar">
-    <button class="tool" id="expBtn">⬇ Mentés fájlba</button>
-    <button class="tool" id="impBtn">⬆ Betöltés fájlból</button>
+    <span id="conn" class="bad">○ Nincs kapcsolat</span>
+    <button class="tool" id="brokerBtn">Bróker</button>
+    <button class="tool" id="expBtn">⬇ Mentés</button>
+    <button class="tool" id="impBtn">⬆ Betöltés</button>
     <input type="file" id="impFile" accept="application/json,.json" hidden>
     <span id="msg" class="muted"></span>
   </div>
   <div id="grid" class="grid"></div>
-  <p id="empty" class="muted" style="display:none">Még nincs telefon hozzáadva. Add hozzá az elsőt a lenti gombbal, és írd be az app „Helyzetmegosztás" kártyáján megjelenő két topicot.</p>
+  <p id="empty" class="muted" style="display:none">Előbb állítsd be a brókert (Bróker gomb), majd add hozzá az első telefont az app „Helyzetmegosztás" kártyáján megjelenő két topickal.</p>
   <button class="addbtn" id="addBtn">➕ Telefon hozzáadása</button>
-  <p class="muted" style="margin-top:1.4rem;font-size:.8rem">A ≈ szám a böngésződ közös ntfy-kerete (kb. 60 kérés, 5 mp-enként +1). Csak becslés — a tényleges elfogyást az ntfy 429-es hibája jelzi a panelen. A topicok itt a böngésződben tárolódnak; a „Mentés fájlba" gombbal készíts biztonsági mentést, mert a böngésző-adatok törlése egyébként ezt is törli.</p>
+  <p class="hint">A topicok és a bróker-adatok a böngésződben tárolódnak (localStorage). A „Mentés" gombbal készíts fájl-biztonsági mentést, mert a böngésző-adatok törlése ezt is törli. A bróker jelszava csak ebben a böngészőben van eltárolva.</p>
 </div>
+
+<dialog id="brokerDlg">
+  <h2>Bróker beállítások (HiveMQ)</h2>
+  <label>Host</label>
+  <input id="bHost" placeholder="xxxx.s1.eu.hivemq.cloud" autocapitalize="off" autocorrect="off" spellcheck="false">
+  <label>WebSocket port</label>
+  <input id="bPort" placeholder="8884" inputmode="numeric">
+  <label>Felhasználónév</label>
+  <input id="bUser" autocapitalize="off" autocorrect="off" spellcheck="false">
+  <label>Jelszó</label>
+  <input id="bPass" type="password" autocapitalize="off" autocorrect="off" spellcheck="false">
+  <div class="dlgrow">
+    <button id="bCancel">Mégse</button>
+    <button class="save" id="bSave">Mentés és kapcsolódás</button>
+  </div>
+</dialog>
 
 <dialog id="dlg">
   <h2 id="dlgTitle">Telefon hozzáadása</h2>
   <label>Név (pl. Nagyi régi telefon)</label>
   <input id="fName" placeholder="Nagyi telefonja">
-  <label>Parancs-topic (ibq-cmd-…)</label>
-  <input id="fCmd" placeholder="ibq-cmd-xxxxxx" autocapitalize="off" autocorrect="off" spellcheck="false">
-  <label>Eredmény-topic (ibq-loc-…)</label>
-  <input id="fRes" placeholder="ibq-loc-xxxxxx" autocapitalize="off" autocorrect="off" spellcheck="false">
-  <details>
-    <summary>Speciális</summary>
-    <label>ntfy szerver</label>
-    <input id="fBase" placeholder="https://ntfy.sh">
-  </details>
+  <label>Parancs-topic</label>
+  <input id="fCmd" placeholder="ibq/cmd/xxxxxx" autocapitalize="off" autocorrect="off" spellcheck="false">
+  <label>Eredmény-topic</label>
+  <input id="fRes" placeholder="ibq/loc/xxxxxx" autocapitalize="off" autocorrect="off" spellcheck="false">
   <div class="dlgrow">
     <button class="del" id="fDelete" style="display:none">Törlés</button>
     <button id="fCancel">Mégse</button>
@@ -83,64 +95,69 @@ summary{cursor:pointer;color:#9fb0b8;font-size:.85rem}
   </div>
 </dialog>
 
+<script src="https://unpkg.com/mqtt@5.10.1/dist/mqtt.min.js"></script>
 <script>
-var sources = {};       // id -> EventSource
-var pendingTimers = {}; // id -> "no response" timeout handle
-var WAIT_MS = 35000;    // how long to wait for a phone to answer before saying nothing came
+var pendingTimers = {}; // deviceId -> "no response" timeout
+var WAIT_MS = 35000;
 var editingId = null;
+var client = null;
 
 /* ---------- persistence ---------- */
-function load(){
-  var raw = localStorage.getItem("devices");
-  if(raw){ try{ return JSON.parse(raw); }catch(e){} }
-  var oldCmd = localStorage.getItem("ntfy_cmd");
-  if(oldCmd){
-    var one = [{ id: mkId(), name: "Telefon",
-      base: localStorage.getItem("ntfy_base") || "https://ntfy.sh",
-      cmd: oldCmd, res: localStorage.getItem("ntfy_res") || "" }];
-    save(one); return one;
-  }
-  return [];
-}
-function save(d){ localStorage.setItem("devices", JSON.stringify(d)); }
+function loadBroker(){ try{ return JSON.parse(localStorage.getItem("broker")) || {}; }catch(e){ return {}; } }
+function saveBroker(b){ localStorage.setItem("broker", JSON.stringify(b)); }
+function loadDevices(){ try{ return JSON.parse(localStorage.getItem("mqdevices")) || []; }catch(e){ return []; } }
+function saveDevices(d){ localStorage.setItem("mqdevices", JSON.stringify(d)); }
 function mkId(){ return "d" + Date.now() + Math.floor(Math.random()*1000); }
-function baseOf(d){ return (d.base || "https://ntfy.sh").replace(/\/+$/, ""); }
 
-/* ---------- ntfy token-bucket estimate (per browser IP, shared) ---------- */
-var TOK_MAX = 60, TOK_REFILL_MS = 5000;
-function currentTokens(){
-  var t = parseFloat(localStorage.getItem("tok"));
-  var ts = parseFloat(localStorage.getItem("tokTs"));
-  if(isNaN(t)) t = TOK_MAX;
-  if(isNaN(ts)) ts = Date.now();
-  return Math.min(TOK_MAX, t + (Date.now()-ts)/TOK_REFILL_MS);
+/* ---------- MQTT ---------- */
+function setConn(state, text){
+  var el = document.getElementById("conn");
+  el.className = state; el.textContent = text;
 }
-function setTokens(v){ localStorage.setItem("tok", String(v)); localStorage.setItem("tokTs", String(Date.now())); }
-function spendToken(){ setTokens(Math.max(0, currentTokens()-1)); }
+function connectBroker(){
+  var b = loadBroker();
+  if(!b.host){ setConn("bad", "○ Nincs bróker beállítva"); return; }
+  if(client){ try{ client.end(true); }catch(e){} client = null; }
+  setConn("wait", "… Kapcsolódás");
+  var url = "wss://" + b.host + ":" + (b.port || "8884") + "/mqtt";
+  var opts = { clientId: "holvan-" + Math.random().toString(16).slice(2), clean: true,
+               reconnectPeriod: 4000, connectTimeout: 20000 };
+  if(b.user){ opts.username = b.user; opts.password = b.pass || ""; }
+  client = mqtt.connect(url, opts);
+  client.on("connect", function(){ setConn("ok", "● Kapcsolódva"); subscribeAll(); });
+  client.on("reconnect", function(){ setConn("wait", "… Újrakapcsolódás"); });
+  client.on("close", function(){ setConn("bad", "○ Nincs kapcsolat"); });
+  client.on("error", function(e){ setConn("bad", "○ Hiba: " + (e && e.message ? e.message : "kapcsolat")); });
+  client.on("message", function(topic, payload){ onMessage(topic, payload.toString()); });
+}
+function subscribeAll(){
+  if(!client || !client.connected) return;
+  loadDevices().forEach(function(d){ if(d.res){ client.subscribe(d.res, { qos: 1 }); } });
+}
+function onMessage(topic, text){
+  var dev = loadDevices().filter(function(d){ return d.res === topic; })[0];
+  if(dev){ showResult(dev.id, text); }
+}
 
 /* ---------- rendering ---------- */
 function esc(t){ return t.replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;"); }
 function linkify(t){ return esc(t).replace(/(https?:\/\/[^\s]+)/g, function(u){ return '<a href="'+u+'" target="_blank" rel="noopener">'+u+'</a>'; }); }
-function closeSources(){ for(var k in sources){ try{ sources[k].close(); }catch(e){} } sources = {}; }
 
 function render(){
-  closeSources();
   var grid = document.getElementById("grid");
   grid.innerHTML = "";
-  var devices = load();
+  var devices = loadDevices();
   document.getElementById("empty").style.display = devices.length ? "none" : "block";
-  devices.forEach(function(d){ grid.appendChild(panel(d)); subscribe(d); });
-  updateCounters();
+  devices.forEach(function(d){ grid.appendChild(panel(d)); });
+  subscribeAll();
 }
-
 function panel(d){
   var card = document.createElement("div");
   card.className = "card";
   card.innerHTML =
-    '<div class="head"><h2></h2><span class="cnt" title="Becsült, böngészőnként közös ntfy-keret"></span>'+
+    '<div class="head"><h2></h2>'+
     '<button class="icon" title="Szerkesztés" data-act="edit">✏️</button></div>'+
     '<button class="primary" data-act="ask">📍 Lekérés</button>'+
-    '<div class="limited"></div>'+
     '<div class="result muted">Még nem érkezett helyzet.</div>'+
     '<iframe class="map" title="Térkép" loading="lazy"></iframe>'+
     '<div class="maplink"></div>'+
@@ -152,88 +169,43 @@ function panel(d){
   card._d = d;
   return card;
 }
-
-function updateCounters(){
-  var n = Math.floor(currentTokens());
-  document.querySelectorAll(".cnt").forEach(function(el){
-    if(el.dataset.limited === "1"){ el.textContent = "⛔ 429"; el.className = "cnt limit"; return; }
-    el.textContent = "≈ " + n;
-    el.className = "cnt" + (n <= 5 ? " warn" : "");
-  });
+function cardById(id){
+  var grid = document.getElementById("grid");
+  for(var i=0;i<grid.children.length;i++){ if(grid.children[i]._d && grid.children[i]._d.id===id) return grid.children[i]; }
+  return null;
 }
-setInterval(updateCounters, 2000);
 
 function ask(d, btn, card){
   if(!d.cmd){ card.querySelector(".result").textContent = "Nincs parancs-topic beállítva."; return; }
-  var cnt = card.querySelector(".cnt");
-  var limited = card.querySelector(".limited");
-  clearTimeout(pendingTimers[d.id]); // drop any earlier wait before starting a new one
+  if(!client || !client.connected){ card.querySelector(".result").textContent = "Nincs bróker-kapcsolat (lásd fent)."; return; }
+  clearTimeout(pendingTimers[d.id]);
   btn.disabled = true; var old = btn.textContent; btn.textContent = "Kérés elküldve…";
-  spendToken(); updateCounters();
-  fetch(baseOf(d) + "/" + d.cmd, { method:"POST", body:"locate" })
-    .then(function(r){
-      if(r.status === 429){
-        setTokens(0);
-        cnt.dataset.limited = "1";
-        var ra = r.headers.get("Retry-After");
-        limited.textContent = "⛔ Elérted az ntfy korlátját (HTTP 429). " +
-          (ra ? ("Próbáld kb. " + ra + " mp múlva.") : "Várj egy kicsit, aztán újra.");
-        limited.style.display = "block";
-      } else if(r.ok){
-        cnt.dataset.limited = "";
-        limited.style.display = "none";
-        // Publish accepted -- but the answer must come back from the phone. Show that we're
-        // waiting, and if nothing arrives, say so instead of hanging silently (the phone may be
-        // over its own ntfy quota, off, or offline).
-        var res = card.querySelector(".result");
-        res.classList.add("muted");
-        res.textContent = "Lekérés elküldve, várom a választ…";
-        startWait(d, card);
-      } else {
-        cnt.dataset.limited = "";
-        limited.style.display = "none";
-        card.querySelector(".result").textContent = "Küldési hiba (HTTP " + r.status + ").";
-      }
-      updateCounters();
-    })
-    .catch(function(){ card.querySelector(".result").textContent = "Nem sikerült elküldeni (nincs net?)."; })
-    .finally(function(){ setTimeout(function(){ btn.disabled=false; btn.textContent=old; }, 3000); });
+  var res = card.querySelector(".result");
+  // Command must NOT be retained, so a reconnecting phone never replays it (that caused a loop on ntfy).
+  client.publish(d.cmd, "locate", { qos: 1, retain: false }, function(err){
+    if(err){ res.classList.remove("muted"); res.textContent = "Küldési hiba: " + err.message; }
+    else {
+      res.classList.add("muted"); res.textContent = "Lekérés elküldve, várom a választ…";
+      startWait(d, card);
+    }
+    setTimeout(function(){ btn.disabled=false; btn.textContent=old; }, 3000);
+  });
 }
-
 function startWait(d, card){
   clearTimeout(pendingTimers[d.id]);
   pendingTimers[d.id] = setTimeout(function(){
     var res = card.querySelector(".result");
     res.classList.remove("muted");
     res.textContent = "⏳ Nincs válasz a telefontól (~" + Math.round(WAIT_MS/1000) +
-      " mp). Lehet, hogy nem tudott válaszolni: kimerült ntfy-kvóta, kikapcsolt telefon vagy nincs net.";
+      " mp). Lehet, hogy nem tudott válaszolni: kikapcsolt telefon, nincs net, vagy nincs helyzet-engedély.";
   }, WAIT_MS);
 }
-
-function subscribe(d){
-  if(!d.res) return;
-  var es = new EventSource(baseOf(d) + "/" + d.res + "/sse");
-  es.onmessage = function(e){
-    try{
-      var m = JSON.parse(e.data);
-      if(m.event === "message" && m.message){ showResult(d.id, m.message, m.time); }
-    }catch(err){}
-  };
-  sources[d.id] = es;
-}
-
-function cardById(id){
-  var grid = document.getElementById("grid");
-  for(var i=0;i<grid.children.length;i++){ if(grid.children[i]._d && grid.children[i]._d.id===id) return grid.children[i]; }
-  return null;
-}
-function showResult(id, message, timeSec){
-  clearTimeout(pendingTimers[id]); // an answer arrived -> cancel the "no response" timeout
+function showResult(id, message){
+  clearTimeout(pendingTimers[id]);
   var card = cardById(id); if(!card) return;
   var r = card.querySelector(".result");
   r.classList.remove("muted"); r.innerHTML = linkify(message);
-  var when = timeSec ? new Date(timeSec*1000) : new Date();
-  card.querySelector(".time").textContent = "beérkezett: " + when.toLocaleString("hu-HU");
+  card.querySelector(".time").textContent = "beérkezett: " + new Date().toLocaleString("hu-HU");
   var mm = message.match(/q=(-?\d+(?:\.\d+)?),(-?\d+(?:\.\d+)?)/);
   var map = card.querySelector(".map"), link = card.querySelector(".maplink");
   if(mm){
@@ -244,7 +216,29 @@ function showResult(id, message, timeSec){
   } else { map.style.display = "none"; link.innerHTML = ""; }
 }
 
-/* ---------- add / edit dialog ---------- */
+/* ---------- broker dialog ---------- */
+var brokerDlg = document.getElementById("brokerDlg");
+document.getElementById("brokerBtn").onclick = function(){
+  var b = loadBroker();
+  document.getElementById("bHost").value = b.host || "";
+  document.getElementById("bPort").value = b.port || "8884";
+  document.getElementById("bUser").value = b.user || "";
+  document.getElementById("bPass").value = b.pass || "";
+  if(brokerDlg.showModal) brokerDlg.showModal(); else brokerDlg.setAttribute("open","");
+};
+document.getElementById("bCancel").onclick = function(){ if(brokerDlg.close) brokerDlg.close(); else brokerDlg.removeAttribute("open"); };
+document.getElementById("bSave").onclick = function(){
+  saveBroker({
+    host: document.getElementById("bHost").value.trim(),
+    port: document.getElementById("bPort").value.trim() || "8884",
+    user: document.getElementById("bUser").value.trim(),
+    pass: document.getElementById("bPass").value
+  });
+  if(brokerDlg.close) brokerDlg.close(); else brokerDlg.removeAttribute("open");
+  connectBroker();
+};
+
+/* ---------- device dialog ---------- */
 var dlg = document.getElementById("dlg");
 function openDialog(d){
   editingId = d ? d.id : null;
@@ -252,41 +246,37 @@ function openDialog(d){
   document.getElementById("fName").value = d ? (d.name||"") : "";
   document.getElementById("fCmd").value = d ? (d.cmd||"") : "";
   document.getElementById("fRes").value = d ? (d.res||"") : "";
-  document.getElementById("fBase").value = d ? (d.base||"") : "";
   document.getElementById("fDelete").style.display = d ? "block" : "none";
-  if(typeof dlg.showModal === "function") dlg.showModal(); else dlg.setAttribute("open","");
+  if(dlg.showModal) dlg.showModal(); else dlg.setAttribute("open","");
 }
 function closeDialog(){ if(dlg.close) dlg.close(); else dlg.removeAttribute("open"); }
 document.getElementById("addBtn").onclick = function(){ openDialog(null); };
 document.getElementById("fCancel").onclick = closeDialog;
 document.getElementById("fSave").onclick = function(){
-  var devices = load();
-  var rec = {
-    name: document.getElementById("fName").value.trim() || "Telefon",
-    cmd: document.getElementById("fCmd").value.trim(),
-    res: document.getElementById("fRes").value.trim(),
-    base: document.getElementById("fBase").value.trim() || "https://ntfy.sh"
-  };
+  var devices = loadDevices();
+  var rec = { name: document.getElementById("fName").value.trim() || "Telefon",
+              cmd: document.getElementById("fCmd").value.trim(),
+              res: document.getElementById("fRes").value.trim() };
   if(editingId){ devices = devices.map(function(x){ return x.id===editingId ? Object.assign(x, rec) : x; }); }
   else { rec.id = mkId(); devices.push(rec); }
-  save(devices); closeDialog(); render();
+  saveDevices(devices); closeDialog(); render();
 };
 document.getElementById("fDelete").onclick = function(){
   if(!editingId) return;
-  save(load().filter(function(x){ return x.id !== editingId; }));
+  saveDevices(loadDevices().filter(function(x){ return x.id !== editingId; }));
   closeDialog(); render();
 };
 
-/* ---------- export / import (survives clearing browser data) ---------- */
+/* ---------- export / import ---------- */
 function flash(t){ var m=document.getElementById("msg"); m.textContent=t; setTimeout(function(){ if(m.textContent===t) m.textContent=""; }, 4000); }
 document.getElementById("expBtn").onclick = function(){
-  var data = JSON.stringify({ devices: load() }, null, 2);
+  var data = JSON.stringify({ broker: loadBroker(), devices: loadDevices() }, null, 2);
   var a = document.createElement("a");
   a.href = URL.createObjectURL(new Blob([data], {type:"application/json"}));
-  a.download = "holvan-telefonok.json";
+  a.download = "holvan-config.json";
   document.body.appendChild(a); a.click(); a.remove();
   setTimeout(function(){ URL.revokeObjectURL(a.href); }, 1000);
-  flash("Elmentve fájlba.");
+  flash("Elmentve fájlba (bróker + telefonok).");
 };
 document.getElementById("impBtn").onclick = function(){ document.getElementById("impFile").click(); };
 document.getElementById("impFile").onchange = function(e){
@@ -297,15 +287,17 @@ document.getElementById("impFile").onchange = function(e){
       var obj = JSON.parse(fr.result);
       if(obj && Array.isArray(obj.devices)){
         obj.devices.forEach(function(d){ if(!d.id) d.id = mkId(); });
-        save(obj.devices); render(); flash("Betöltve: " + obj.devices.length + " telefon.");
+        saveDevices(obj.devices);
+        if(obj.broker) saveBroker(obj.broker);
+        render(); connectBroker(); flash("Betöltve.");
       } else { flash("Nem megfelelő fájl."); }
     }catch(err){ flash("Hibás fájl."); }
   };
-  fr.readAsText(f);
-  e.target.value = "";
+  fr.readAsText(f); e.target.value = "";
 };
 
 render();
+connectBroker();
 </script>
 </body>
 </html>
