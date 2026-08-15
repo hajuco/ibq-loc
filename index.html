@@ -102,6 +102,13 @@ var WAIT_MS = 35000;
 var editingId = null;
 var client = null;
 
+// Convenience defaults (never the password).
+var DEF_HOST = "711e63f56cea479ab371293d7b763785.s1.eu.hivemq.cloud";
+var DEF_PORT = "8884";
+var DEF_USER = "android";
+var DEF_CMD = "ibq/cmd/9f3k2m";
+var DEF_RES = "ibq/loc/9f3k2m";
+
 /* ---------- persistence ---------- */
 function loadBroker(){ try{ return JSON.parse(localStorage.getItem("broker")) || {}; }catch(e){ return {}; } }
 function saveBroker(b){ localStorage.setItem("broker", JSON.stringify(b)); }
@@ -220,9 +227,9 @@ function showResult(id, message){
 var brokerDlg = document.getElementById("brokerDlg");
 document.getElementById("brokerBtn").onclick = function(){
   var b = loadBroker();
-  document.getElementById("bHost").value = b.host || "";
-  document.getElementById("bPort").value = b.port || "8884";
-  document.getElementById("bUser").value = b.user || "";
+  document.getElementById("bHost").value = b.host || DEF_HOST;
+  document.getElementById("bPort").value = b.port || DEF_PORT;
+  document.getElementById("bUser").value = b.user || DEF_USER;
   document.getElementById("bPass").value = b.pass || "";
   if(brokerDlg.showModal) brokerDlg.showModal(); else brokerDlg.setAttribute("open","");
 };
@@ -244,8 +251,8 @@ function openDialog(d){
   editingId = d ? d.id : null;
   document.getElementById("dlgTitle").textContent = d ? "Telefon szerkesztése" : "Telefon hozzáadása";
   document.getElementById("fName").value = d ? (d.name||"") : "";
-  document.getElementById("fCmd").value = d ? (d.cmd||"") : "";
-  document.getElementById("fRes").value = d ? (d.res||"") : "";
+  document.getElementById("fCmd").value = d ? (d.cmd||"") : DEF_CMD;
+  document.getElementById("fRes").value = d ? (d.res||"") : DEF_RES;
   document.getElementById("fDelete").style.display = d ? "block" : "none";
   if(dlg.showModal) dlg.showModal(); else dlg.setAttribute("open","");
 }
