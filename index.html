@@ -85,6 +85,8 @@ summary{cursor:pointer;color:#9fb0b8;font-size:.85rem}
 
 <script>
 var sources = {};       // id -> EventSource
+var pendingTimers = {}; // id -> "no response" timeout handle
+var WAIT_MS = 35000;    // how long to wait for a phone to answer before saying nothing came
 var editingId = null;
 
 /* ---------- persistence ---------- */
@@ -165,6 +167,7 @@ function ask(d, btn, card){
   if(!d.cmd){ card.querySelector(".result").textContent = "Nincs parancs-topic beállítva."; return; }
   var cnt = card.querySelector(".cnt");
   var limited = card.querySelector(".limited");
+  clearTimeout(pendingTimers[d.id]); // drop any earlier wait before starting a new one
   btn.disabled = true; var old = btn.textContent; btn.textContent = "Kérés elküldve…";
   spendToken(); updateCounters();
   fetch(baseOf(d) + "/" + d.cmd, { method:"POST", body:"locate" })
@@ -176,15 +179,35 @@ function ask(d, btn, card){
         limited.textContent = "⛔ Elérted az ntfy korlátját (HTTP 429). " +
           (ra ? ("Próbáld kb. " + ra + " mp múlva.") : "Várj egy kicsit, aztán újra.");
         limited.style.display = "block";
+      } else if(r.ok){
+        cnt.dataset.limited = "";
+        limited.style.display = "none";
+        // Publish accepted -- but the answer must come back from the phone. Show that we're
+        // waiting, and if nothing arrives, say so instead of hanging silently (the phone may be
+        // over its own ntfy quota, off, or offline).
+        var res = card.querySelector(".result");
+        res.classList.add("muted");
+        res.textContent = "Lekérés elküldve, várom a választ…";
+        startWait(d, card);
       } else {
         cnt.dataset.limited = "";
         limited.style.display = "none";
-        if(!r.ok){ card.querySelector(".result").textContent = "Küldési hiba (HTTP " + r.status + ")."; }
+        card.querySelector(".result").textContent = "Küldési hiba (HTTP " + r.status + ").";
       }
       updateCounters();
     })
     .catch(function(){ card.querySelector(".result").textContent = "Nem sikerült elküldeni (nincs net?)."; })
     .finally(function(){ setTimeout(function(){ btn.disabled=false; btn.textContent=old; }, 3000); });
+}
+
+function startWait(d, card){
+  clearTimeout(pendingTimers[d.id]);
+  pendingTimers[d.id] = setTimeout(function(){
+    var res = card.querySelector(".result");
+    res.classList.remove("muted");
+    res.textContent = "⏳ Nincs válasz a telefontól (~" + Math.round(WAIT_MS/1000) +
+      " mp). Lehet, hogy nem tudott válaszolni: kimerült ntfy-kvóta, kikapcsolt telefon vagy nincs net.";
+  }, WAIT_MS);
 }
 
 function subscribe(d){
@@ -205,6 +228,7 @@ function cardById(id){
   return null;
 }
 function showResult(id, message, timeSec){
+  clearTimeout(pendingTimers[id]); // an answer arrived -> cancel the "no response" timeout
   var card = cardById(id); if(!card) return;
   var r = card.querySelector(".result");
   r.classList.remove("muted"); r.innerHTML = linkify(message);
